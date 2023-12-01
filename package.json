@@ -1,0 +1,16 @@
+{
+  "name": "daimon_discord",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google-cloud/text-to-speech": "^5.0.1",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1"
+  }
+}
