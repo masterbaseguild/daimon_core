@@ -48,6 +48,7 @@ const dbQueryOne = (sql: string, params: string[]) => {
 const activity = 'MasterBase';
 const userRoleId = process.env.USER_ROLE_ID;
 const invites = new Collection<any,any>()
+const invitedUsers = new Collection<any,any>()
 
 const client=new Client({intents:[
 	GatewayIntentBits.Guilds,
@@ -55,7 +56,8 @@ const client=new Client({intents:[
 	GatewayIntentBits.MessageContent,
 	GatewayIntentBits.GuildMembers,
 	GatewayIntentBits.GuildVoiceStates,
-	GatewayIntentBits.GuildInvites
+	GatewayIntentBits.GuildInvites,
+	GatewayIntentBits.GuildMessageReactions,
 ]})
 
 client.on(Events.ClientReady, ()=>
@@ -93,6 +95,18 @@ client.on(Events.GuildMemberAdd, async(member:any)=>
 	const invite = newInvites.find((invite:any)=>invite.uses > oldInvites.get(invite.code))
 	console.log("Rewarding " + invite.inviter.id + " for inviting " + member.id + ".")
 	dbQuery("INSERT INTO discord_users (id,invites) VALUES (?,1) ON DUPLICATE KEY UPDATE invites = invites + 1", [invite.inviter.id.toString()])
+	invitedUsers.set(member.id, invite.inviter.id)
+})
+
+client.on(Events.GuildMemberRemove, async(member:any)=>
+{
+	if(invitedUsers.has(member.id))
+	{
+		const inviter = invitedUsers.get(member.id)
+		console.log("Punishing " + inviter + " for removing " + member.id + ".")
+		dbQuery("UPDATE discord_users SET invites = invites - 1 WHERE id = ?", [inviter.toString()])
+		invitedUsers.delete(member.id)
+	}
 })
 
 client.on(Events.MessageCreate, async(message:any)=>
@@ -104,23 +118,32 @@ client.on(Events.MessageCreate, async(message:any)=>
 	}
 })
 
-/* client.on(Events.MessageReactionAdd, async(reaction:any,user:any)=>
+client.on(Events.MessageDelete, async(message:any)=>
 {
-	if(!user.bot)
+	if(!message.author.bot)
 	{
-		console.log("Rewarding " + user.id + " for reacting to a message.")
+		console.log("Punishing " + message.author.id + " for deleting a message.")
+		dbQuery("UPDATE discord_users SET messages = messages - 1 WHERE id = ?", [message.author.id.toString()])
+	}
+})
+
+client.on(Events.MessageReactionAdd, async(reaction:any,user:any)=>
+{
+	if(!user.bot&&reaction.message.channel.type===5)
+	{
+		console.log("Rewarding " + user.id + " for reacting to an announcement.")
 		dbQuery("INSERT INTO discord_users (id, reactions) VALUES (?,1) ON DUPLICATE KEY UPDATE reactions = reactions + 1", [user.id.toString()])
 	}
 })
 
 client.on(Events.MessageReactionRemove, async(reaction:any,user:any)=>
 {
-	if(!user.bot)
+	if(!user.bot&&reaction.message.channel.type===5)
 	{
-		console.log("Punishing " + user.id + " for removing a reaction from a message.")
+		console.log("Punishing " + user.id + " for removing a reaction from an announcement.")
 		dbQuery("UPDATE discord_users SET reactions = reactions - 1 WHERE id = ?", [user.id.toString()])
 	}
-}) */
+})
 
 client.login(process.env.BOT_TOKEN)
 
@@ -129,8 +152,9 @@ setInterval(async function(){
 	{
 		guild.channels.cache.filter((channel)=>channel.type===2).forEach((channel:any)=>
 		{
-			channel.members.map((member:any)=>member.id).forEach(async(member:any)=>await dbQueryOne("UPDATE discord_users SET minutes = minutes + ? WHERE id = ? ON DUPLICATE KEY UPDATE minutes = minutes + ?",
-			[Number(process.env.SIMULATION_TIME), member.toString(), Number(process.env.SIMULATION_TIME)]))
+			console.log("Rewarding " + channel.members.size + " members for being in a voice channel.")
+			channel.members.map((member:any)=>member.id).forEach(async(member:any)=>await dbQueryOne("INSERT INTO discord_users (id, seconds) VALUES (?,?) ON DUPLICATE KEY UPDATE seconds = seconds + ?",
+			[member.toString(), Number(process.env.SIMULATION_TIME), Number(process.env.SIMULATION_TIME)]))
 		})
 	})
 },Number(process.env.SIMULATION_TIME)*1000)
