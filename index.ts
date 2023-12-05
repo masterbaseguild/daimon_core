@@ -152,7 +152,7 @@ setInterval(async function(){
 	{
 		guild.channels.cache.filter((channel)=>channel.type===2).forEach((channel:any)=>
 		{
-			console.log("Rewarding " + channel.members.size + " members for being in a voice channel.")
+			if(channel.members.size) console.log("Rewarding " + channel.members.size + " members for being in a voice channel.")
 			channel.members.map((member:any)=>member.id).forEach(async(member:any)=>await dbQueryOne("INSERT INTO discord_users (id, seconds) VALUES (?,?) ON DUPLICATE KEY UPDATE seconds = seconds + ?",
 			[member.toString(), Number(process.env.SIMULATION_TIME), Number(process.env.SIMULATION_TIME)]))
 		})

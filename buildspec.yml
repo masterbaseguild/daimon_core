@@ -1,0 +1,25 @@
+version: 0.2
+phases:
+  pre_build:
+    commands:
+      - aws ecr get-login-password --region eu-south-1 | docker login --username AWS --password-stdin 125903893583.dkr.ecr.eu-south-1.amazonaws.com
+      - aws s3 cp s3://projectdaimon-env/.env.discord .env
+      - docker pull 125903893583.dkr.ecr.eu-south-1.amazonaws.com/daimon-discord:latest || true
+  build:
+    commands:
+      - |
+        docker build \
+          -t "125903893583.dkr.ecr.eu-south-1.amazonaws.com/daimon-discord:latest" \
+          --cache-from "125903893583.dkr.ecr.eu-south-1.amazonaws.com/daimon-discord:latest" \
+          .
+  post_build:
+    commands:
+      - docker push 125903893583.dkr.ecr.eu-south-1.amazonaws.com/daimon-discord:latest
+      - |
+        printf \
+          '[{"name":"%s","imageUri":"%s"}]' \
+          "daimon-discord" \
+          "125903893583.dkr.ecr.eu-south-1.amazonaws.com/daimon-discord:latest" \
+          > images.json
+artifacts:
+  files: images.json
