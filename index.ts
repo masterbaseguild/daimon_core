@@ -97,7 +97,6 @@ commands.set("leaderboard", {
 			.setTitle("Leaderboard")
 			.setTimestamp(new Date())
 			.setColor(0x0000ff)
-			//use server icon as footer icon
 			.setFooter({text:"MasterBase",iconURL:interaction.guild.iconURL()})
 			.setThumbnail((await client.users.fetch(leaderboard[0].id)).avatarURL())
 			.addFields(leaderboard.map((user:any)=>{return {name:(leaderboard.indexOf(user)+1).toString() + ". " + usernames[leaderboard.indexOf(user)].username,value:"Lv. " + scoreToLevel(user.score).toString() + " (Score " + user.score.toString() + ")",inline:false}}));
@@ -118,7 +117,7 @@ client.on(Events.ClientReady, ()=>
 		console.log('Discord Bot Connection Successful.')
 	}
 	//update the score on the db based on the stats
-	dbQuery("UPDATE discord_users SET score = invites*100 + messages + reactions*10 + seconds/10",[])
+	dbQuery("UPDATE discord_users SET score = invites*100 + messages + reactions*10 + seconds/10 + boost_bonus",[])
 })
 
 client.on(Events.InviteCreate, (invite:any)=>
@@ -141,7 +140,11 @@ client.on(Events.GuildMemberAdd, async(member:any)=>
 	const oldInvites = invites.get(member.guild.id)
 	const invite = newInvites.find((invite:any)=>invite.uses > oldInvites.get(invite.code))
 	console.log("Rewarding " + invite.inviter.id + " for inviting " + member.id + ".")
-	dbQuery("INSERT INTO discord_users (id,invites,score) VALUES (?,1,100) ON DUPLICATE KEY UPDATE invites = invites + 1, score = score + 100",[invite.inviter.id.toString()])
+	//if inviter is boosting, give 100 bonus points
+	if(member.premiumSinceTimestamp)
+		dbQuery("INSERT INTO discord_users (id,invites,score,boost_bonus) VALUES (?,1,200,100) ON DUPLICATE KEY UPDATE invites = invites + 1, score = score + 200, boost_bonus = boost_bonus + 100",[invite.inviter.id.toString()])
+	else
+		dbQuery("INSERT INTO discord_users (id,invites,score) VALUES (?,1,100) ON DUPLICATE KEY UPDATE invites = invites + 1, score = score + 100",[invite.inviter.id.toString()])
 	if(invitedUsers.size >= maxInvitedUsers) invitedUsers.clear()
 	invitedUsers.set(member.id, invite.inviter.id)
 })
@@ -162,7 +165,10 @@ client.on(Events.MessageCreate, async(message:any)=>
 	if(!message.author.bot)
 	{
 		console.log("Rewarding " + message.author.id + " for sending a message.")
-		dbQuery("INSERT INTO discord_users (id, messages, score) VALUES (?,1,1) ON DUPLICATE KEY UPDATE messages = messages + 1, score = score + 1", [message.author.id.toString()])
+		if(message.author.premiumSinceTimestamp)
+			dbQuery("INSERT INTO discord_users (id, messages, score, boost_bonus) VALUES (?,1,1,1) ON DUPLICATE KEY UPDATE messages = messages + 1, score = score + 1, boost_bonus = boost_bonus + 1", [message.author.id.toString()])
+		else
+			dbQuery("INSERT INTO discord_users (id, messages, score) VALUES (?,1,1) ON DUPLICATE KEY UPDATE messages = messages + 1, score = score + 1", [message.author.id.toString()])
 	}
 })
 
@@ -180,6 +186,9 @@ client.on(Events.MessageReactionAdd, async(reaction:any,user:any)=>
 	if(!user.bot&&reaction.message.channel.type===5)
 	{
 		console.log("Rewarding " + user.id + " for reacting to an announcement.")
+		if(user.premiumSinceTimestamp)
+			dbQuery("INSERT INTO discord_users (id, reactions, score, boost_bonus) VALUES (?,1,10,10) ON DUPLICATE KEY UPDATE reactions = reactions + 1, score = score + 10, boost_bonus = boost_bonus + 10", [user.id.toString()])
+		else
 		dbQuery("INSERT INTO discord_users (id, reactions, score) VALUES (?,1,10) ON DUPLICATE KEY UPDATE reactions = reactions + 1, score = score + 10", [user.id.toString()])
 	}
 })
@@ -235,8 +244,14 @@ setInterval(async function(){
 		guild.channels.cache.filter((channel)=>channel.type===2).forEach((channel:any)=>
 		{
 			if(channel.members.size) console.log("Rewarding " + channel.members.size + " members for being in a voice channel.")
-			channel.members.map((member:any)=>member.id).forEach(async(member:any)=>await dbQueryOne("INSERT INTO discord_users (id, seconds, score) VALUES (?,?,?) ON DUPLICATE KEY UPDATE seconds = seconds + ?, score = score + ?",
-			[member.toString(), Number(process.env.SIMULATION_TIME), Number(process.env.SIMULATION_TIME)/10, Number(process.env.SIMULATION_TIME), Number(process.env.SIMULATION_TIME)/10]))
+			channel.members.map((member:any)=>member.id).forEach(async(member:any)=>{
+				if(member.premiumSinceTimestamp)
+					await dbQueryOne("INSERT INTO discord_users (id, seconds, score, boost_bonus) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE seconds = seconds + ?, score = score + ?, boost_bonus = boost_bonus + ?",
+					[member.toString(), Number(process.env.SIMULATION_TIME), Number(process.env.SIMULATION_TIME)/10, Number(process.env.SIMULATION_TIME)/10, Number(process.env.SIMULATION_TIME), Number(process.env.SIMULATION_TIME)/10, Number(process.env.SIMULATION_TIME)/10])
+				else
+					await dbQueryOne("INSERT INTO discord_users (id, seconds, score) VALUES (?,?,?) ON DUPLICATE KEY UPDATE seconds = seconds + ?, score = score + ?",
+					[member.toString(), Number(process.env.SIMULATION_TIME), Number(process.env.SIMULATION_TIME)/10, Number(process.env.SIMULATION_TIME), Number(process.env.SIMULATION_TIME)/10])
+			})
 		})
 	})
 },Number(process.env.SIMULATION_TIME)*1000)
