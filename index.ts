@@ -273,3 +273,57 @@ const rest = new REST().setToken(process.env.BOT_TOKEN || '');
 }
 )();
 }
+
+const winterHolidayEmotes = [
+	"🎄",
+	"🎅",
+	"🤶",
+	"🎁",
+	"⛄",
+	"🔔",
+	"🍬",
+	"🍭",
+	"🍪",
+	"🥛",
+	"🧦",
+	"🎆",
+	"🎇",
+	"🎉",
+	"🎊",
+	"🎈",
+	"🎀",
+	"🛷",
+	"🦌",
+	"🌟",
+	"✨",
+	"🧊",
+]
+
+const channelIds = new Collection<any,any>()
+
+//the following function maps the unicode code of an emote to a winter holiday emote
+const emoteToWinterHolidayEmote = (emote:string) => {
+	const emoteCode = emote.codePointAt(0)
+	if(emoteCode)
+	{
+		const index = emoteCode % winterHolidayEmotes.length
+		return winterHolidayEmotes[index]
+	}
+	else
+	{
+		return "❓"
+	}
+}
+
+const decorateChannelName = (channelName:string,channelId:string) => {
+	//example: "⏬｜general"
+	//result: "🎄｜general" (emote chosen through the emoteToWinterHolidayEmote function)
+	//CAREFUL: some emotes are actually two characters long, so account for that when slicing the string
+	const emote = channelName.slice(0,channelName.indexOf("｜"))
+	const channelNameWithoutEmote = channelName.slice(channelName.indexOf("｜"))
+	channelIds.set(channelId,emote)
+	return emoteToWinterHolidayEmote(emote) + channelNameWithoutEmote
+}
+
+console.log(decorateChannelName("⏬｜general",""))
+console.log(decorateChannelName("📢｜announcements",""))
