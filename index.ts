@@ -1,6 +1,7 @@
 import { REST, Routes, Client, GatewayIntentBits, Collection, Events, SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import mariadb from 'mariadb';
 import 'dotenv/config';
+import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 
 const database = mariadb.createPool({
     host: process.env.DATABASE_ENDPOINT,
@@ -8,6 +9,47 @@ const database = mariadb.createPool({
     password: process.env.DATABASE_PASSWORD,
     database: process.env.DATABASE_NAME
 });
+
+const s3 = new S3Client({
+    region: process.env.S3_REGION
+});
+
+const s3Query = (path: string) => {
+    return new Promise((resolve) => {
+        s3.send(new GetObjectCommand({
+            Bucket: process.env.S3_BUCKET_NAME,
+            Key: path
+        }))
+            .then((data: any) => {
+                data.Body.transformToString()
+                    .then((body: any) => {
+                        console.log(body);
+                        resolve(body);
+                    });
+            })
+            .catch((err: any) => {
+                console.log(err);
+                resolve(null);
+            });
+    })
+};
+
+const s3Create = (path: string, body: any) => {
+    return new Promise<boolean>((resolve) => {
+        s3.send(new PutObjectCommand({
+            Bucket: process.env.S3_BUCKET_NAME,
+            Key: path,
+            Body: body
+        }))
+            .then(() => {
+                resolve(true);
+            })
+            .catch((err: any) => {
+                console.log(err);
+                resolve(false);
+            });
+    })
+}
 
 const dbQuery = (sql: string, params: string[]) => {
     return new Promise((resolve) => {
@@ -118,6 +160,15 @@ client.on(Events.ClientReady, ()=>
 	}
 	//update the score on the db based on the stats
 	dbQuery("UPDATE discord_users SET score = invites*100 + messages + reactions*10 + seconds/10 + boost_bonus",[])
+	/* decorateServer().then(()=>{
+		console.log(serverDecorationData)
+		s3Create("serverDecorationData.json",JSON.stringify(serverDecorationData))
+			.then((success:boolean)=>{
+				if(success) console.log("Server decoration data saved to S3.")
+				else console.log("Server decoration data failed to save to S3.")
+			})
+	}) */
+	//undecorateServer()
 })
 
 client.on(Events.InviteCreate, (invite:any)=>
@@ -274,6 +325,25 @@ const rest = new REST().setToken(process.env.BOT_TOKEN || '');
 )();
 }
 
+const serverDecorationData = {
+	preDecoration: {
+		serverName: "",
+		botNickname: "",
+		channels: <any>[],
+		categories: <any>[],
+		nicknames: <any>[],
+		roles: <any>[]
+	},
+	postDecoration: {
+		serverName: "",
+		botNickname: "",
+		channels: <any>[],
+		categories: <any>[],
+		nicknames: <any>[],
+		roles: <any>[]
+	}
+}
+
 const winterHolidayEmotes = [
 	"🎄",
 	"🎅",
@@ -299,9 +369,6 @@ const winterHolidayEmotes = [
 	"🧊",
 ]
 
-const channelIds = new Collection<any,any>()
-
-//the following function maps the unicode code of an emote to a winter holiday emote
 const emoteToWinterHolidayEmote = (emote:string) => {
 	const emoteCode = emote.codePointAt(0)
 	if(emoteCode)
@@ -315,15 +382,105 @@ const emoteToWinterHolidayEmote = (emote:string) => {
 	}
 }
 
-const decorateChannelName = (channelName:string,channelId:string) => {
-	//example: "⏬｜general"
-	//result: "🎄｜general" (emote chosen through the emoteToWinterHolidayEmote function)
-	//CAREFUL: some emotes are actually two characters long, so account for that when slicing the string
+const decorateSeparatedName = (channelName:string) => {
+	if(channelName.indexOf("｜")===-1) return channelName
 	const emote = channelName.slice(0,channelName.indexOf("｜"))
 	const channelNameWithoutEmote = channelName.slice(channelName.indexOf("｜"))
-	channelIds.set(channelId,emote)
 	return emoteToWinterHolidayEmote(emote) + channelNameWithoutEmote
 }
 
-console.log(decorateChannelName("⏬｜general",""))
-console.log(decorateChannelName("📢｜announcements",""))
+const decorateSpacedName = (channelName:string) => {
+	const emote = channelName.slice(0,channelName.indexOf(" "))
+	const channelNameWithoutEmote = channelName.slice(channelName.indexOf(" "))
+	return emoteToWinterHolidayEmote(emote) + channelNameWithoutEmote
+}
+
+const decorateChannels = async() => {
+	const guild = await client.guilds.fetch(process.env.BOT_GUILD_ID || '')
+	await guild.channels.fetch().then(async(channels:any)=>{
+		await channels.forEach(async (channel:any)=>{
+			if(channel.type===4) return
+			serverDecorationData.preDecoration.channels.push({id:channel.id,name:channel.name})
+			serverDecorationData.postDecoration.channels.push({id:channel.id,name:decorateSeparatedName(channel.name)})
+			await channel.setName(decorateSeparatedName(channel.name))
+		})
+	})
+}
+
+const decorateCategories = async() => {
+	const guild = await client.guilds.fetch(process.env.BOT_GUILD_ID || '')
+	await guild.channels.fetch().then(async (channels:any)=>{
+		await channels.forEach(async (channel:any)=>{
+			if(channel.type!==4) return
+			serverDecorationData.preDecoration.categories.push({id:channel.id,name:channel.name})
+			serverDecorationData.postDecoration.categories.push({id:channel.id,name:decorateSpacedName(channel.name)})
+			await channel.setName(decorateSpacedName(channel.name))
+		})
+	})
+}
+
+const decorateNicknames = async() => {
+	const guild = await client.guilds.fetch(process.env.BOT_GUILD_ID || '')
+	await guild.members.fetch().then(async(members:any)=>{
+		await members.forEach(async(member:any)=>{
+			if(!member.manageable || !member.nickname || (!member.nickname.startsWith("⏬") && !member.nickname.startsWith("🎵") && !member.nickname.startsWith("🎤"))) return
+			serverDecorationData.preDecoration.nicknames.push({id:member.id,name:member.nickname})
+			serverDecorationData.postDecoration.nicknames.push({id:member.id,name:decorateSpacedName(member.nickname)})
+			await member.setNickname(decorateSpacedName(member.nickname))
+		})
+	})
+}
+
+const decorateRoles = async() => {
+	const guild = await client.guilds.fetch(process.env.BOT_GUILD_ID || '')
+	await guild.roles.fetch().then(async(roles:any)=>{
+		await roles.forEach(async(role:any)=>{
+			if(!role.editable || role.name==="@everyone") return
+			serverDecorationData.preDecoration.roles.push({id:role.id,name:role.name})
+			serverDecorationData.postDecoration.roles.push({id:role.id,name:decorateSpacedName(role.name)})
+			await role.setName(decorateSpacedName(role.name))
+		})
+	})
+}
+
+const decorateServer = async() => {
+	await decorateChannels()
+	await decorateCategories()
+	await decorateNicknames()
+	await decorateRoles()
+	const guild = await client.guilds.fetch(process.env.BOT_GUILD_ID || '')
+	serverDecorationData.preDecoration.serverName = guild.name
+	serverDecorationData.postDecoration.serverName = decorateSpacedName(guild.name)
+	await guild.setName(decorateSpacedName(guild.name))
+	const botMember = await guild.members.fetch(process.env.BOT_USER_ID || '')
+	serverDecorationData.preDecoration.botNickname = botMember.user.username
+	serverDecorationData.postDecoration.botNickname = decorateSpacedName(botMember.user.username)
+	await botMember.setNickname(decorateSpacedName(botMember.user.username))
+}
+
+const undecorateServer = async() => {
+	const guild = await client.guilds.fetch(process.env.BOT_GUILD_ID || '')
+	const botMember = await guild.members.fetch(process.env.BOT_USER_ID || '')
+	serverDecorationData.preDecoration.channels.forEach((channel:any)=>{
+		guild.channels.fetch(channel.id).then((channel:any)=>{
+			channel.setName(channel.name)
+		})
+	})
+	serverDecorationData.preDecoration.categories.forEach((category:any)=>{
+		guild.channels.fetch(category.id).then((category:any)=>{
+			category.setName(category.name)
+		})
+	})
+	serverDecorationData.preDecoration.nicknames.forEach((nickname:any)=>{
+		guild.members.fetch(nickname.id).then((member:any)=>{
+			member.setNickname(nickname.name)
+		})
+	})
+	serverDecorationData.preDecoration.roles.forEach((role:any)=>{
+		guild.roles.fetch(role.id).then((role:any)=>{
+			role.setName(role.name)
+		})
+	})
+	guild.setName(serverDecorationData.preDecoration.serverName)
+	botMember.setNickname(serverDecorationData.preDecoration.botNickname)
+}
