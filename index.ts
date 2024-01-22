@@ -23,7 +23,6 @@ const s3Query = (path: string) => {
             .then((data: any) => {
                 data.Body.transformToString()
                     .then((body: any) => {
-                        console.log(body);
                         resolve(body);
                     });
             })
@@ -459,26 +458,78 @@ const decorateServer = async() => {
 }
 
 const undecorateServer = async() => {
+	const serverDecorationData: any = await s3Query("serverDecorationData.json").then((data:any)=>{
+		if(data) return JSON.parse(data)
+		else return null
+	})
+	if(!serverDecorationData) return
 	const guild = await client.guilds.fetch(process.env.BOT_GUILD_ID || '')
 	const botMember = await guild.members.fetch(process.env.BOT_USER_ID || '')
 	serverDecorationData.preDecoration.channels.forEach((channel:any)=>{
-		guild.channels.fetch(channel.id).then((channel:any)=>{
-			channel.setName(channel.name)
+		var fetchedChannel: any;
+		const exists = guild.channels.resolve(channel.id)
+		if(exists)
+		{
+			console.log("Channel "+channel.id+", named "+channel.name+", exists.")
+			fetchedChannel = guild.channels.fetch(channel.id)
+		}
+		else
+		{
+			console.log("Channel "+channel.id+", named "+channel.name+", does not exist.")
+			return
+		}
+		if(!fetchedChannel) return
+		fetchedChannel.then((fetchedChannel:any)=>{
+			console.log("Setting channel "+channel.id+" to "+channel.name+".")
+			fetchedChannel.setName(channel.name)
 		})
 	})
 	serverDecorationData.preDecoration.categories.forEach((category:any)=>{
-		guild.channels.fetch(category.id).then((category:any)=>{
-			category.setName(category.name)
+		var fetchedCategory;
+		const exists = guild.channels.resolve(category.id)
+		if(exists)
+		{
+			fetchedCategory = guild.channels.fetch(category.id)
+		}
+		else
+		{
+			console.log("Channel "+category.id+", named "+category.name+", does not exist.")
+			return
+		}
+		if(!fetchedCategory) return
+		fetchedCategory.then((fetchedCategory:any)=>{
+			console.log("Setting category "+category.id+" to "+category.name+".")
+			fetchedCategory.setName(category.name)
 		})
 	})
 	serverDecorationData.preDecoration.nicknames.forEach((nickname:any)=>{
-		guild.members.fetch(nickname.id).then((member:any)=>{
+		var fetchedMember;
+		try {
+			fetchedMember = guild.members.fetch(nickname.id)
+		}
+		catch(error) {
+			console.log(error)
+		}
+		if(!fetchedMember) return
+		fetchedMember.then((member:any)=>{
 			member.setNickname(nickname.name)
 		})
 	})
 	serverDecorationData.preDecoration.roles.forEach((role:any)=>{
-		guild.roles.fetch(role.id).then((role:any)=>{
-			role.setName(role.name)
+		var fetchedRole;
+		const exists = guild.roles.resolve(role.id)
+		if(exists) {
+			fetchedRole = guild.roles.fetch(role.id)
+		}
+		else {
+			console.log("Role "+role.id+", named "+role.name+", does not exist.")
+			return
+		}
+		if(!fetchedRole) return
+		fetchedRole.then((fetchedRole:any)=>{
+			if(!fetchedRole.editable || fetchedRole.name==="@everyone") return
+			console.log("Setting role "+role.id+" to "+role.name+".")
+			fetchedRole.setName(role.name)
 		})
 	})
 	guild.setName(serverDecorationData.preDecoration.serverName)
