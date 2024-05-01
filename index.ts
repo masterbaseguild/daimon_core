@@ -109,9 +109,9 @@ commands.set("stats", {
         .setDescription('Get stats for your user'),
     async execute(interaction: any) {
 		const userId = interaction.user.id;
-		const user: any = await dbQueryOne("SELECT * FROM discord_users WHERE id = ?", [userId.toString()]);
+		const user: any = await dbQueryOne("SELECT * FROM discord_users WHERE discord_id = ?", [userId.toString()]);
 		const responseCard = new EmbedBuilder()
-			.setTitle("Stats of " + interaction.user.username)
+			.setTitle("Stats of " + interaction.user.username.toString())
 			.setTimestamp(new Date())
 			.setColor(0x0000ff)
 			.setFooter({text:"MasterBase",iconURL:interaction.guild.iconURL()})
@@ -184,6 +184,7 @@ client.on(Events.InviteDelete, (invite:any)=>
 
 client.on(Events.GuildMemberAdd, async(member:any)=>
 {
+	if(member.user.bot) return
 	const roleToAdd = member.guild.roles.cache.find((role:any)=>role.id == userRoleId)
 	member.roles.add(roleToAdd)
 	const newInvites = await member.guild.invites.fetch()
@@ -192,63 +193,62 @@ client.on(Events.GuildMemberAdd, async(member:any)=>
 	console.log("Rewarding " + invite.inviter.id + " for inviting " + member.id + ".")
 	//if inviter is boosting, give 100 bonus points
 	if(member.premiumSinceTimestamp)
-		dbQuery("INSERT INTO discord_users (id,invites,score,boost_bonus) VALUES (?,1,200,100) ON DUPLICATE KEY UPDATE invites = invites + 1, score = score + 200, boost_bonus = boost_bonus + 100",[invite.inviter.id.toString()])
+		dbQuery("INSERT INTO discord_users (discord_id,discord_username,invites,score,boost_bonus) VALUES (?,?,1,200,100) ON DUPLICATE KEY UPDATE invites = invites + 1, score = score + 200, boost_bonus = boost_bonus + 100",[invite.inviter.id.toString(),invite.inviter.username.toString()])
 	else
-		dbQuery("INSERT INTO discord_users (id,invites,score) VALUES (?,1,100) ON DUPLICATE KEY UPDATE invites = invites + 1, score = score + 100",[invite.inviter.id.toString()])
+		dbQuery("INSERT INTO discord_users (discord_id,discord_username,invites,score) VALUES (?,?,1,100) ON DUPLICATE KEY UPDATE invites = invites + 1, score = score + 100",[invite.inviter.id.toString(),invite.inviter.username.toString()])
 	if(invitedUsers.size >= maxInvitedUsers) invitedUsers.clear()
 	invitedUsers.set(member.id, invite.inviter.id)
 })
 
 client.on(Events.GuildMemberRemove, async(member:any)=>
 {
+	if(member.user.bot) return
 	if(invitedUsers.has(member.id))
 	{
 		const inviter = invitedUsers.get(member.id)
 		console.log("Punishing " + inviter + " for removing " + member.id + ".")
-		dbQuery("UPDATE discord_users SET invites = invites - 1, score = score - 100 WHERE id = ?", [inviter.toString()])
+		dbQuery("UPDATE discord_users SET invites = invites - 1, score = score - 100 WHERE discord_id = ?", [inviter.toString()])
 		invitedUsers.delete(member.id)
 	}
 })
 
 client.on(Events.MessageCreate, async(message:any)=>
 {
-	if(!message.author.bot)
-	{
-		console.log("Rewarding " + message.author.id + " for sending a message.")
-		if(message.author.premiumSinceTimestamp)
-			dbQuery("INSERT INTO discord_users (id, messages, score, boost_bonus) VALUES (?,1,1,1) ON DUPLICATE KEY UPDATE messages = messages + 1, score = score + 1, boost_bonus = boost_bonus + 1", [message.author.id.toString()])
-		else
-			dbQuery("INSERT INTO discord_users (id, messages, score) VALUES (?,1,1) ON DUPLICATE KEY UPDATE messages = messages + 1, score = score + 1", [message.author.id.toString()])
-	}
+	if(message.author.bot) return
+	console.log("Rewarding " + message.author.id + " for sending a message.")
+	if(message.author.premiumSinceTimestamp)
+		dbQuery("INSERT INTO discord_users (discord_id,discord_username, messages, score, boost_bonus) VALUES (?,?,1,1,1) ON DUPLICATE KEY UPDATE messages = messages + 1, score = score + 1, boost_bonus = boost_bonus + 1", [message.author.id.toString(),message.author.username.toString()])
+	else
+		dbQuery("INSERT INTO discord_users (discord_id,discord_username, messages, score) VALUES (?,?,1,1) ON DUPLICATE KEY UPDATE messages = messages + 1, score = score + 1", [message.author.id.toString(),message.author.username.toString()])
 })
 
 client.on(Events.MessageDelete, async(message:any)=>
 {
-	if(!message.author.bot)
-	{
-		console.log("Punishing " + message.author.id + " for deleting a message.")
-		dbQuery("UPDATE discord_users SET messages = messages - 1, score = score - 1 WHERE id = ?", [message.author.id.toString()])
-	}
+	if(message.author.bot) return
+	console.log("Punishing " + message.author.id + " for deleting a message.")
+	dbQuery("UPDATE discord_users SET messages = messages - 1, score = score - 1 WHERE discord_id = ?", [message.author.id.toString()])
 })
 
 client.on(Events.MessageReactionAdd, async(reaction:any,user:any)=>
 {
-	if(!user.bot&&reaction.message.channel.type===5)
+	if(user.bot) return
+	if(reaction.message.channel.type===5)
 	{
 		console.log("Rewarding " + user.id + " for reacting to an announcement.")
 		if(user.premiumSinceTimestamp)
-			dbQuery("INSERT INTO discord_users (id, reactions, score, boost_bonus) VALUES (?,1,10,10) ON DUPLICATE KEY UPDATE reactions = reactions + 1, score = score + 10, boost_bonus = boost_bonus + 10", [user.id.toString()])
+			dbQuery("INSERT INTO discord_users (discord_id,discord_username, reactions, score, boost_bonus) VALUES (?,?,1,10,10) ON DUPLICATE KEY UPDATE reactions = reactions + 1, score = score + 10, boost_bonus = boost_bonus + 10", [user.id.toString(),user.username.toString()])
 		else
-		dbQuery("INSERT INTO discord_users (id, reactions, score) VALUES (?,1,10) ON DUPLICATE KEY UPDATE reactions = reactions + 1, score = score + 10", [user.id.toString()])
+		dbQuery("INSERT INTO discord_users (discord_id,discord_username, reactions, score) VALUES (?,?,1,10) ON DUPLICATE KEY UPDATE reactions = reactions + 1, score = score + 10", [user.id.toString(),user.username.toString()])
 	}
 })
 
 client.on(Events.MessageReactionRemove, async(reaction:any,user:any)=>
 {
-	if(!user.bot&&reaction.message.channel.type===5)
+	if(user.bot) return
+	if(reaction.message.channel.type===5)
 	{
 		console.log("Punishing " + user.id + " for removing a reaction from an announcement.")
-		dbQuery("UPDATE discord_users SET reactions = reactions - 1, score = score - 10 WHERE id = ?", [user.id.toString()])
+		dbQuery("UPDATE discord_users SET reactions = reactions - 1, score = score - 10 WHERE discord_id = ?", [user.id.toString()])
 	}
 })
 
@@ -294,13 +294,14 @@ setInterval(async function(){
 		guild.channels.cache.filter((channel)=>channel.type===2).forEach((channel:any)=>
 		{
 			if(channel.members.size) console.log("Rewarding " + channel.members.size + " members for being in a voice channel.")
-			channel.members.map((member:any)=>member.id).forEach(async(member:any)=>{
+			channel.members.map((member:any)=>{member.id,member.username,member.bot,member.premiumSinceTimestamp}).forEach(async(member:any)=>{
+				if (member.bot) return
 				if(member.premiumSinceTimestamp)
-					await dbQueryOne("INSERT INTO discord_users (id, seconds, score, boost_bonus) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE seconds = seconds + ?, score = score + ?, boost_bonus = boost_bonus + ?",
-					[member.toString(), Number(process.env.SIMULATION_TIME), Number(process.env.SIMULATION_TIME)/10, Number(process.env.SIMULATION_TIME)/10, Number(process.env.SIMULATION_TIME), Number(process.env.SIMULATION_TIME)/10, Number(process.env.SIMULATION_TIME)/10])
+					await dbQuery("INSERT INTO discord_users (discord_id, discord_username, seconds, score, boost_bonus) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE seconds = seconds + ?, score = score + ?, boost_bonus = boost_bonus + ?",
+					[member.id.toString(), member.username.toString(), Number(process.env.SIMULATION_TIME), Number(process.env.SIMULATION_TIME)/10, Number(process.env.SIMULATION_TIME)/10, Number(process.env.SIMULATION_TIME), Number(process.env.SIMULATION_TIME)/10, Number(process.env.SIMULATION_TIME)/10])
 				else
-					await dbQueryOne("INSERT INTO discord_users (id, seconds, score) VALUES (?,?,?) ON DUPLICATE KEY UPDATE seconds = seconds + ?, score = score + ?",
-					[member.toString(), Number(process.env.SIMULATION_TIME), Number(process.env.SIMULATION_TIME)/10, Number(process.env.SIMULATION_TIME), Number(process.env.SIMULATION_TIME)/10])
+					await dbQuery("INSERT INTO discord_users (discord_id, discord_username, seconds, score) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE seconds = seconds + ?, score = score + ?",
+					[member.id.toString(), member.username.toString(), Number(process.env.SIMULATION_TIME), Number(process.env.SIMULATION_TIME)/10, Number(process.env.SIMULATION_TIME), Number(process.env.SIMULATION_TIME)/10])
 			})
 		})
 	})
