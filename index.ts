@@ -138,7 +138,7 @@ commands.set("leaderboard", {
 			.setTimestamp(new Date())
 			.setColor(0x0000ff)
 			.setFooter({text:"MasterBase",iconURL:interaction.guild.iconURL()})
-			.setThumbnail((await client.users.fetch(leaderboard[0].discord_id)).avatarURL())
+			.setThumbnail((await client.users.fetch(leaderboard[0].discord_id.toString())).avatarURL())
 			.addFields(leaderboard.map((user:any)=>{return {name:(leaderboard.indexOf(user)+1).toString() + ". " + user.discord_username,value:"Lv. " + scoreToLevel(user.score).toString() + " (Score " + user.score.toString() + ")",inline:false}}));
 		await interaction.reply({embeds: [responseCard]});
 	}
