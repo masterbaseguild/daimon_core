@@ -133,14 +133,13 @@ commands.set("leaderboard", {
 		.setDescription('Get the leaderboard'),
 	async execute(interaction: any) {
 		const leaderboard: any = await dbQuery("SELECT * FROM discord_users ORDER BY score DESC LIMIT 10", []);
-		const usernames = await Promise.all(leaderboard.map(async(user:any)=>{return await client.users.fetch(user.id)}))
 		const responseCard = new EmbedBuilder()
 			.setTitle("Leaderboard")
 			.setTimestamp(new Date())
 			.setColor(0x0000ff)
 			.setFooter({text:"MasterBase",iconURL:interaction.guild.iconURL()})
-			.setThumbnail((await client.users.fetch(leaderboard[0].id)).avatarURL())
-			.addFields(leaderboard.map((user:any)=>{return {name:(leaderboard.indexOf(user)+1).toString() + ". " + usernames[leaderboard.indexOf(user)].username,value:"Lv. " + scoreToLevel(user.score).toString() + " (Score " + user.score.toString() + ")",inline:false}}));
+			.setThumbnail((await client.users.fetch(leaderboard[0].discord_id)).avatarURL())
+			.addFields(leaderboard.map((user:any)=>{return {name:(leaderboard.indexOf(user)+1).toString() + ". " + user.discord_username,value:"Lv. " + scoreToLevel(user.score).toString() + " (Score " + user.score.toString() + ")",inline:false}}));
 		await interaction.reply({embeds: [responseCard]});
 	}
 })
