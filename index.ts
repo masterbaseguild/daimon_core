@@ -306,6 +306,70 @@ setInterval(async function(){
 	})
 },Number(process.env.SIMULATION_TIME)*1000)
 
+// temporary host of minecraft simulation
+
+setInterval(async function(){
+    console.log('Running simulation');
+	const factions: any = await dbQuery('SELECT * FROM minecraft.mf_faction', []);
+    console.log("Factions");
+    console.log(factions);
+    factions.forEach(async (faction: any) => {
+        const players: any = await dbQuery('SELECT * FROM minecraft.mf_faction_member JOIN minecraft.mf_player ON minecraft.mf_faction_member.player_id = minecraft.mf_player.id WHERE faction_id = ?', [faction.id]);
+        console.log("Players for faction " + faction.name);
+        console.log(players);
+        let power = faction.bonus_power;
+        players.forEach((player: any) => {
+            power += player.power;
+        });
+        if(power < 0) power = 0;
+        console.log("Power for faction " + faction.name + ": " + power)
+        await dbQuery('INSERT INTO minecraft_factions (mf_id, power_integral, score) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE score = power_integral + ?, power_integral = power_integral + ?', [faction.id, power, power, power, power]);
+    })
+    const players: any = await dbQuery('SELECT * FROM minecraft.zs__player', []);
+    players.forEach(async (player: any) => {
+        const stats: any = await dbQuery('SELECT * FROM minecraft.zs__stats WHERE uuid = ?', [player.uuid]);
+        let score = 0;
+        stats.forEach((stat: any) => {
+            switch(stat.stat) {
+                case 'DAMAGE_DEALT':
+                    score += Number(stat.val) * 5;
+                    break;
+                case 'MOB_KILLS':
+                    score += Number(stat.val) * 10;
+                    break;
+                case 'PLAYER_KILLS':
+                    score += Number(stat.val) * 100;
+                    break;
+                case 'PLAY_ONE_MINUTE':
+                    score += Number(stat.val) / 200;
+                    break;
+                case 'AVIATE_ONE_CM':
+                case 'BOAT_ONE_CM':
+                case 'CROUCH_ONE_CM':
+                case 'FLY_ONE_CM':
+                case 'HORSE_ONE_CM':
+                case 'MINECART_ONE_CM':
+                case 'PIG_ONE_CM':
+                case 'SPRINT_ONE_CM':
+                case 'STRIDER_ONE_CM':
+                case 'SWIM_ONE_CM':
+                case 'WALK_ONE_CM':
+                    score += Number(stat.val) / 7500;
+                    break;
+                case 'z:mined':
+                case 'z:crafted':
+                case 'z:placed':
+                    score += Number(stat.val) / 25;
+                    break;
+                default:
+                    break;
+            }
+        });
+        score = Math.floor(score);
+        await dbQuery('INSERT INTO minecraft_players (minecraft_username, score) VALUES (?, ?) ON DUPLICATE KEY UPDATE score = score + ?', [player.name, score, score]);
+    });
+},Number(process.env.SIMULATION_TIME)*15*1000)
+
 if(process.env.RELOADING==="true")
 {
 const rest = new REST().setToken(process.env.BOT_TOKEN || '');
