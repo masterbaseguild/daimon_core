@@ -325,31 +325,25 @@ setInterval(async function(){
     const players: any = await dbQuery('SELECT * FROM minecraft.zs__player', []);
 	console.log("Updating "+players.length+" players' scores according to their stats.")
     players.forEach(async (player: any) => {
-		console.log("updating "+player.name);
         const stats: any = await dbQuery('SELECT * FROM minecraft.zs__stats WHERE uuid = ?', [player.uuid]);
         let score = 0;
         stats.forEach((stat: any) => {
             switch(stat.stat) {
                 case 'DAMAGE_DEALT':
-                    score += Number(stat.val) * 5;
-					console.log("DAMAGE_DEALT: "+stat.val+", score: "+Math.floor(Number(stat.val) * 5));
+                    score += Number(stat.val) / 20;
                     break;
                 case 'MOB_KILLS':
-                    score += Number(stat.val) * 10;
-					console.log("MOB_KILLS: "+stat.val+", score: "+Math.floor(Number(stat.val) * 10));
+                    score += Number(stat.val) * 5;
                     break;
                 case 'PLAYER_KILLS':
-                    score += Number(stat.val) * 100;
-					console.log("PLAYER_KILLS: "+stat.val+", score: "+Math.floor(Number(stat.val) * 100));
+                    score += Number(stat.val) * 50;
                     break;
                 case 'PLAY_ONE_MINUTE':
                     score += Number(stat.val) / 200;
-					console.log("PLAY_ONE_MINUTE: "+stat.val+", score: "+Math.floor(Number(stat.val) / 200));
                     break;
                 case 'AVIATE_ONE_CM':
                 case 'BOAT_ONE_CM':
                 case 'CROUCH_ONE_CM':
-                case 'FLY_ONE_CM':
                 case 'HORSE_ONE_CM':
                 case 'MINECART_ONE_CM':
                 case 'PIG_ONE_CM':
@@ -357,21 +351,18 @@ setInterval(async function(){
                 case 'STRIDER_ONE_CM':
                 case 'SWIM_ONE_CM':
                 case 'WALK_ONE_CM':
-                    score += Number(stat.val) / 7500;
-					console.log(stat.stat+": "+stat.val+", score: "+Math.floor(Number(stat.val) / 7500));
+                    score += Number(stat.val) / 15000;
                     break;
                 case 'z:mined':
                 case 'z:crafted':
                 case 'z:placed':
                     score += Number(stat.val) / 25;
-					console.log(stat.stat+": "+stat.val+", score: "+Math.floor(Number(stat.val) / 25));
                     break;
                 default:
                     break;
             }
         });
         score = Math.floor(score);
-		console.log("Final score: "+score);
         await dbQuery('INSERT INTO minecraft_players (minecraft_username, score) VALUES (?, ?) ON DUPLICATE KEY UPDATE score = ?', [player.name, score, score]);
     });
 },Number(process.env.SIMULATION_TIME)*15*1000)
