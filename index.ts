@@ -396,13 +396,13 @@ setInterval(async function(){
 	guilds.forEach(async (guild: any) => {
 		const members: any = await dbQuery('SELECT * FROM players WHERE guild = ?', [guild.id]);
 		const guests: any = await dbQuery('SELECT * FROM players_to_guilds JOIN players ON players_to_guilds.player = players.id WHERE players_to_guilds.guild = ?', [guild.id]);
-		if(guests.length > 0) guests.forEach(async (guest: any) => {
+		if(guests) guests.forEach(async (guest: any) => {
 			const guestGuilds: any = await dbQuery('SELECT * FROM players_to_guilds WHERE player = ?', [guest.id]);
 			guest.score = Math.floor(guest.score / guestGuilds.length);
 		});
 		var score = 0;
-		if(members.length > 0) score += calculateGuildScore(members);
-		if(guests.length > 0) score += calculateGuildScore(guests);
+		if(members) score += calculateGuildScore(members);
+		if(guests) score += calculateGuildScore(guests);
 		const minecraftFaction: any = await dbQueryOne('SELECT * FROM minecraft_factions WHERE guild = ?', [guild.id]);
 		if(minecraftFaction) score += minecraftFaction.score;
 		await dbQuery('UPDATE guilds SET score = ? WHERE id = ?', [score, guild.id]);
