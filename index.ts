@@ -295,7 +295,8 @@ setInterval(async function(){
 		guild.channels.cache.filter((channel)=>channel.type===2).forEach((channel:any)=>
 		{
 			if(channel.members.size) console.log("Rewarding " + channel.members.size + " members for being in a voice channel.")
-			channel.members.map((member:any)=>{return {id:member.id,username:member.username,bot:member.bot,premiumSinceTimestamp:member.premiumSinceTimestamp}}).forEach(async(member:any)=>{
+			channel.members.map((member: any)=>member.user).forEach(async(member:any)=>{
+				console.log(member)
 				if (member.bot) return
 				if(member.premiumSinceTimestamp)
 					await dbQuery("INSERT INTO discord_users (discord_id, discord_username, seconds, score, boost_bonus) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE seconds = seconds + ?, score = score + ?, boost_bonus = boost_bonus + ?",
