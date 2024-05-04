@@ -27,7 +27,7 @@ const s3Query = (path: string) => {
                     });
             })
             .catch((err: any) => {
-                console.log(err);
+                console.error(err);
                 resolve(null);
             });
     })
@@ -44,7 +44,7 @@ const s3Create = (path: string, body: any) => {
                 resolve(true);
             })
             .catch((err: any) => {
-                console.log(err);
+                console.error(err);
                 resolve(false);
             });
     })
@@ -62,7 +62,7 @@ const dbQuery = (sql: string, params: string[]) => {
                 }
             })
             .catch((err: any) => {
-                console.log(err);
+                console.error(err);
                 resolve(null);
             });
     });
@@ -80,7 +80,7 @@ const dbQueryOne = (sql: string, params: string[]) => {
                 }
             })
             .catch((err: any) => {
-                console.log(err);
+                console.error(err);
                 resolve(null);
             });
     });
@@ -171,12 +171,14 @@ client.on(Events.ClientReady, ()=>
 
 client.on(Events.InviteCreate, (invite:any)=>
 {
+	console.log("Invite created: " + invite.code + ".")
 	const guildInvites = invites.get(invite.guild.id)
 	if(guildInvites) guildInvites.set(invite.code, invite.uses)
 })
 
 client.on(Events.InviteDelete, (invite:any)=>
 {
+	console.log("Invite deleted: " + invite.code + ".")
 	const guildInvites = invites.get(invite.guild.id)
 	if(guildInvites) guildInvites.delete(invite.code)
 })
@@ -189,14 +191,14 @@ client.on(Events.GuildMemberAdd, async(member:any)=>
 	const newInvites = await member.guild.invites.fetch()
 	const oldInvites = invites.get(member.guild.id)
 	const invite = newInvites.find((invite:any)=>invite.uses > oldInvites.get(invite.code))
-	console.log("Rewarding " + invite.inviter.id + " for inviting " + member.id + ".")
+	console.log("Rewarding " + invite.inviter.username + " for inviting " + member.username + ".")
 	//if inviter is boosting, give 100 bonus points
 	if(member.premiumSinceTimestamp)
 		dbQuery("INSERT INTO discord_users (discord_id,discord_username,invites,score,boost_bonus) VALUES (?,?,1,200,100) ON DUPLICATE KEY UPDATE invites = invites + 1, score = score + 200, boost_bonus = boost_bonus + 100",[invite.inviter.id.toString(),invite.inviter.username.toString()])
 	else
 		dbQuery("INSERT INTO discord_users (discord_id,discord_username,invites,score) VALUES (?,?,1,100) ON DUPLICATE KEY UPDATE invites = invites + 1, score = score + 100",[invite.inviter.id.toString(),invite.inviter.username.toString()])
 	if(invitedUsers.size >= maxInvitedUsers) invitedUsers.clear()
-	invitedUsers.set(member.id, invite.inviter.id)
+	invitedUsers.set(member.id, {id: invite.inviter.id, username: invite.inviter.username})
 })
 
 client.on(Events.GuildMemberRemove, async(member:any)=>
@@ -205,8 +207,8 @@ client.on(Events.GuildMemberRemove, async(member:any)=>
 	if(invitedUsers.has(member.id))
 	{
 		const inviter = invitedUsers.get(member.id)
-		console.log("Punishing " + inviter + " for removing " + member.id + ".")
-		dbQuery("UPDATE discord_users SET invites = invites - 1, score = score - 100 WHERE discord_id = ?", [inviter.toString()])
+		console.log("Punishing " + inviter.username + " for removing " + member.id + ".")
+		dbQuery("UPDATE discord_users SET invites = invites - 1, score = score - 100 WHERE discord_id = ?", [inviter.id.toString()])
 		invitedUsers.delete(member.id)
 	}
 })
@@ -214,7 +216,7 @@ client.on(Events.GuildMemberRemove, async(member:any)=>
 client.on(Events.MessageCreate, async(message:any)=>
 {
 	if(message.author.bot) return
-	console.log("Rewarding " + message.author.id + " for sending a message.")
+	console.log("Rewarding " + message.author.username + " for sending a message.")
 	if(message.author.premiumSinceTimestamp)
 		dbQuery("INSERT INTO discord_users (discord_id,discord_username, messages, score, boost_bonus) VALUES (?,?,1,1,1) ON DUPLICATE KEY UPDATE messages = messages + 1, score = score + 1, boost_bonus = boost_bonus + 1", [message.author.id.toString(),message.author.username.toString()])
 	else
@@ -224,7 +226,7 @@ client.on(Events.MessageCreate, async(message:any)=>
 client.on(Events.MessageDelete, async(message:any)=>
 {
 	if(message.author.bot) return
-	console.log("Punishing " + message.author.id + " for deleting a message.")
+	console.log("Punishing " + message.author.username + " for deleting a message.")
 	dbQuery("UPDATE discord_users SET messages = messages - 1, score = score - 1 WHERE discord_id = ?", [message.author.id.toString()])
 })
 
@@ -233,7 +235,7 @@ client.on(Events.MessageReactionAdd, async(reaction:any,user:any)=>
 	if(user.bot) return
 	if(reaction.message.channel.type===5)
 	{
-		console.log("Rewarding " + user.id + " for reacting to an announcement.")
+		console.log("Rewarding " + user.username + " for reacting to an announcement.")
 		if(user.premiumSinceTimestamp)
 			dbQuery("INSERT INTO discord_users (discord_id,discord_username, reactions, score, boost_bonus) VALUES (?,?,1,10,10) ON DUPLICATE KEY UPDATE reactions = reactions + 1, score = score + 10, boost_bonus = boost_bonus + 10", [user.id.toString(),user.username.toString()])
 		else
@@ -246,20 +248,20 @@ client.on(Events.MessageReactionRemove, async(reaction:any,user:any)=>
 	if(user.bot) return
 	if(reaction.message.channel.type===5)
 	{
-		console.log("Punishing " + user.id + " for removing a reaction from an announcement.")
+		console.log("Punishing " + user.username + " for removing a reaction from an announcement.")
 		dbQuery("UPDATE discord_users SET reactions = reactions - 1, score = score - 10 WHERE discord_id = ?", [user.id.toString()])
 	}
 })
 
 client.on(Events.InteractionCreate, interaction => {
 	if (!interaction.isCommand()) return;
-	console.log(interaction);
+	console.log(interaction.user.username + " used command " + interaction.commandName + ".");
 	const command: any = commands.get(interaction.commandName);
 	if (!command) return;
 	try {
 		command.execute(interaction);
-	} catch (error) {
-		console.error(error);
+	} catch (err) {
+		console.error(err);
 		interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
 	}
 });
@@ -309,39 +311,40 @@ setInterval(async function(){
 // temporary host of minecraft simulation
 
 setInterval(async function(){
-    console.log('Running simulation');
 	const factions: any = await dbQuery('SELECT * FROM minecraft.mf_faction', []);
-    console.log("Factions");
-    console.log(factions);
+	console.log("Rewarding "+factions.length+" factions according to their power.")
     factions.forEach(async (faction: any) => {
         const players: any = await dbQuery('SELECT * FROM minecraft.mf_faction_member JOIN minecraft.mf_player ON minecraft.mf_faction_member.player_id = minecraft.mf_player.id WHERE faction_id = ?', [faction.id]);
-        console.log("Players for faction " + faction.name);
-        console.log(players);
         let power = faction.bonus_power;
         players.forEach((player: any) => {
             power += player.power;
         });
         if(power < 0) power = 0;
-        console.log("Power for faction " + faction.name + ": " + power)
         await dbQuery('INSERT INTO minecraft_factions (mf_id, power_integral, score) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE score = power_integral + ?, power_integral = power_integral + ?', [faction.id, power, power, power, power]);
     })
     const players: any = await dbQuery('SELECT * FROM minecraft.zs__player', []);
+	console.log("Updating "+players.length+" players' scores according to their stats.")
     players.forEach(async (player: any) => {
+		console.log("updating "+player.name);
         const stats: any = await dbQuery('SELECT * FROM minecraft.zs__stats WHERE uuid = ?', [player.uuid]);
         let score = 0;
         stats.forEach((stat: any) => {
             switch(stat.stat) {
                 case 'DAMAGE_DEALT':
                     score += Number(stat.val) * 5;
+					console.log("DAMAGE_DEALT: "+stat.val+", score: "+Math.floor(Number(stat.val) * 5));
                     break;
                 case 'MOB_KILLS':
                     score += Number(stat.val) * 10;
+					console.log("MOB_KILLS: "+stat.val+", score: "+Math.floor(Number(stat.val) * 10));
                     break;
                 case 'PLAYER_KILLS':
                     score += Number(stat.val) * 100;
+					console.log("PLAYER_KILLS: "+stat.val+", score: "+Math.floor(Number(stat.val) * 100));
                     break;
                 case 'PLAY_ONE_MINUTE':
                     score += Number(stat.val) / 200;
+					console.log("PLAY_ONE_MINUTE: "+stat.val+", score: "+Math.floor(Number(stat.val) / 200));
                     break;
                 case 'AVIATE_ONE_CM':
                 case 'BOAT_ONE_CM':
@@ -355,18 +358,21 @@ setInterval(async function(){
                 case 'SWIM_ONE_CM':
                 case 'WALK_ONE_CM':
                     score += Number(stat.val) / 7500;
+					console.log(stat.stat+": "+stat.val+", score: "+Math.floor(Number(stat.val) / 7500));
                     break;
                 case 'z:mined':
                 case 'z:crafted':
                 case 'z:placed':
                     score += Number(stat.val) / 25;
+					console.log(stat.stat+": "+stat.val+", score: "+Math.floor(Number(stat.val) / 25));
                     break;
                 default:
                     break;
             }
         });
         score = Math.floor(score);
-        await dbQuery('INSERT INTO minecraft_players (minecraft_username, score) VALUES (?, ?) ON DUPLICATE KEY UPDATE score = score + ?', [player.name, score, score]);
+		console.log("Final score: "+score);
+        await dbQuery('INSERT INTO minecraft_players (minecraft_username, score) VALUES (?, ?) ON DUPLICATE KEY UPDATE score = ?', [player.name, score, score]);
     });
 },Number(process.env.SIMULATION_TIME)*15*1000)
 
@@ -375,12 +381,11 @@ if(process.env.RELOADING==="true")
 const rest = new REST().setToken(process.env.BOT_TOKEN || '');
 (async () => {
 	try {
-		console.log('Started refreshing slash commands.');
+		console.log('Refreshing slash commands.');
 		await rest.put(
 			Routes.applicationCommands(process.env.BOT_USER_ID || ''),
 			{ body: commands.map((command:any)=>command.data.toJSON()) }
 		);
-		console.log('Successfully reloaded slash commands.');
 	} catch (error) {
 		console.error(error);
 	}
@@ -571,8 +576,8 @@ const undecorateServer = async() => {
 		try {
 			fetchedMember = guild.members.fetch(nickname.id)
 		}
-		catch(error) {
-			console.log(error)
+		catch(err) {
+			console.error(err)
 		}
 		if(!fetchedMember) return
 		fetchedMember.then((member:any)=>{
