@@ -296,7 +296,6 @@ setInterval(async function(){
 		{
 			if(channel.members.size) console.log("Rewarding " + channel.members.size + " members for being in a voice channel.")
 			channel.members.map((member: any)=>member.user).forEach(async(member:any)=>{
-				console.log(member)
 				if (member.bot) return
 				if(member.premiumSinceTimestamp)
 					await dbQuery("INSERT INTO discord_users (discord_id, discord_username, seconds, score, boost_bonus) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE seconds = seconds + ?, score = score + ?, boost_bonus = boost_bonus + ?",
