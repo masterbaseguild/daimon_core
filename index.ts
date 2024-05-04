@@ -385,7 +385,7 @@ setInterval(async function(){
 	players.forEach(async (player: any) => {
 		const discordUser: any = await dbQueryOne('SELECT * FROM discord_users WHERE player = ?', [player.id]);
 		const minecraftPlayer: any = await dbQueryOne('SELECT * FROM minecraft_players WHERE player = ?', [player.id]);
-		var score = 0;
+		var score = player.bonus_score;
 		if(discordUser) score += discordUser.score;
 		if(minecraftPlayer) score += minecraftPlayer.score;
 		await dbQuery('UPDATE players SET score = ? WHERE id = ?', [score, player.id]);
@@ -402,9 +402,12 @@ setInterval(async function(){
 		});
 		var score = 0;
 		if(members) score += calculateGuildScore(members);
+		console.log("Score with members: "+score)
 		if(guests) score += calculateGuildScore(guests);
+		console.log("Score with guests: "+score)
 		const minecraftFaction: any = await dbQueryOne('SELECT * FROM minecraft_factions WHERE guild = ?', [guild.id]);
 		if(minecraftFaction) score += minecraftFaction.score;
+		console.log("Score with faction: "+score)
 		await dbQuery('UPDATE guilds SET score = ? WHERE id = ?', [score, guild.id]);
 	})
 },Number(process.env.SIMULATION_TIME)*15*1000)
