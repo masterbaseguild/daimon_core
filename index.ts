@@ -385,7 +385,9 @@ setInterval(async function(){
 	players.forEach(async (player: any) => {
 		const discordUser: any = await dbQueryOne('SELECT * FROM discord_users WHERE player = ?', [player.id]);
 		const minecraftPlayer: any = await dbQueryOne('SELECT * FROM minecraft_players WHERE player = ?', [player.id]);
-		const score = discordUser.score + minecraftPlayer.score;
+		var score = 0;
+		if(discordUser) score += discordUser.score;
+		if(minecraftPlayer) score += minecraftPlayer.score;
 		await dbQuery('UPDATE players SET score = ? WHERE id = ?', [score, player.id]);
 	})
 	// guilds
