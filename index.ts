@@ -395,7 +395,7 @@ setInterval(async function(){
 	console.log("Updating "+guilds.length+" guilds' scores according to their members' stats.")
 	guilds.forEach(async (guild: any) => {
 		const members: any = await dbQuery('SELECT * FROM players WHERE guild = ?', [guild.id]);
-		const guests: any = await dbQuery('SELECT * FROM players_to_guilds JOIN players ON players_to_guilds.player = players.id WHERE players_to_guilds.guild = ?', [guild.id]);
+		const guests: any = await dbQuery('SELECT player FROM players_to_guilds JOIN players ON players_to_guilds.player = players.id WHERE players_to_guilds.guild = ?', [guild.id]);
 		if(guests) guests.forEach(async (guest: any) => {
 			const guestGuilds: any = await dbQuery('SELECT * FROM players_to_guilds WHERE player = ?', [guest.id]);
 			guest.score = Math.floor(guest.score / guestGuilds.length);
