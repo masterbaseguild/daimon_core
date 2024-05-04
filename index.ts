@@ -367,6 +367,44 @@ setInterval(async function(){
     });
 },Number(process.env.SIMULATION_TIME)*15*1000)
 
+// temporary host of guild and player simulation
+
+function calculateGuildScore(members: any[]) {
+
+    const memberContributions = members.map(member => Math.sqrt(member.score));
+    const totalMemberContribution = memberContributions.reduce((sum, contribution) => sum + contribution, 0);
+    const guildSize = Math.sqrt(members.length);
+
+    return totalMemberContribution / guildSize;
+}
+
+setInterval(async function(){
+	// players
+	const players: any = await dbQuery('SELECT * FROM players', []);
+	console.log("Updating "+players.length+" players' scores according to their stats.")
+	players.forEach(async (player: any) => {
+		const discordUser: any = await dbQueryOne('SELECT * FROM discord_users WHERE player = ?', [player.id]);
+		const minecraftPlayer: any = await dbQueryOne('SELECT * FROM minecraft_players WHERE player = ?', [player.id]);
+		const score = discordUser.score + minecraftPlayer.score;
+		await dbQuery('UPDATE players SET score = ? WHERE id = ?', [score, player.id]);
+	})
+	// guilds
+	const guilds: any = await dbQuery('SELECT * FROM guilds', []);
+	console.log("Updating "+guilds.length+" guilds' scores according to their members' stats.")
+	guilds.forEach(async (guild: any) => {
+		const members: any = await dbQuery('SELECT * FROM players WHERE guild = ?', [guild.id]);
+		const guests: any = await dbQuery('SELECT * FROM players_to_guilds JOIN players ON players_to_guilds.player = players.id WHERE guild = ?', [guild.id]);
+		guests.forEach(async (guest: any) => {
+			const guestGuilds: any = await dbQuery('SELECT * FROM players_to_guilds WHERE player = ?', [guest.id]);
+			guest.score = Math.floor(guest.score / guestGuilds.length);
+		});
+		var score = calculateGuildScore(members) + calculateGuildScore(guests);
+		const minecraftFaction: any = await dbQueryOne('SELECT * FROM minecraft_factions WHERE guild = ?', [guild.id]);
+		if(minecraftFaction) score += minecraftFaction.score;
+		await dbQuery('UPDATE guilds SET score = ? WHERE id = ?', [score, guild.id]);
+	})
+},Number(process.env.SIMULATION_TIME)*15*1000)
+
 if(process.env.RELOADING==="true")
 {
 const rest = new REST().setToken(process.env.BOT_TOKEN || '');
