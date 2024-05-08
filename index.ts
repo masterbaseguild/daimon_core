@@ -404,7 +404,11 @@ setInterval(async function(){
 		if(members.length>0) score += calculateGuildScore(members);
 		if(guests.length>0) score += calculateGuildScore(guests);
 		const minecraftFaction: any = await dbQueryOne('SELECT * FROM minecraft_factions WHERE guild = ?', [guild.id]);
-		if(minecraftFaction) score += minecraftFaction.score;
+		console.log("Minecraft Faction:", minecraftFaction)
+		if(minecraftFaction) {
+			console.log("Current score: "+score+". Adding "+minecraftFaction.score+".")
+			score += minecraftFaction.score;
+		}
 		await dbQuery('UPDATE guilds SET score = ? WHERE id = ?', [score, guild.id]);
 	})
 },Number(process.env.SIMULATION_TIME)*15*1000)
