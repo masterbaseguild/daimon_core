@@ -1,0 +1,7 @@
+version: '3.8'
+
+services:
+  daimon_core:
+    image: daimon_core:latest
+    container_name: daimon_core_service
+    restart: always
