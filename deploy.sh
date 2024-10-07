@@ -10,6 +10,12 @@ if [ $(git rev-list HEAD...origin/live --count) -gt 0 ]; then
     git pull
     docker build -t daimon_core .
     docker-compose up -d
+elif [ "$1" = "force" ]; then
+    echo "Forcing update..."
+    git checkout live
+    git pull
+    docker build -t daimon_core .
+    docker-compose up -d
 else
     echo "No new updates."
 fi
