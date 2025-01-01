@@ -11,7 +11,8 @@
     "@aws-sdk/client-s3": "^3.478.0",
     "discord.js": "^14.14.1",
     "dotenv": "^16.3.1",
-    "mariadb": "^3.2.2"
+    "mariadb": "^3.2.2",
+    "minio": "^8.0.3"
   },
   "devDependencies": {
     "@types/node": "^20.4.8",

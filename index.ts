@@ -1,7 +1,7 @@
 import { REST, Routes, Client, GatewayIntentBits, Collection, Events, SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import mariadb from 'mariadb';
 import 'dotenv/config';
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import * as minio from 'minio';
 
 const database = mariadb.createPool({
     host: process.env.DATABASE_ENDPOINT,
@@ -10,44 +10,46 @@ const database = mariadb.createPool({
     database: process.env.DATABASE_NAME
 });
 
-const s3 = new S3Client({
-    region: process.env.S3_REGION
+const minioClient = new minio.Client({
+    endPoint: process.env.MINIO_ENDPOINT || "localhost",
+    port: parseInt(process.env.MINIO_PORT || "9000"),
+    useSSL: false,
+    accessKey: process.env.MINIO_ACCESS_KEY_ID,
+    secretKey: process.env.MINIO_SECRET_ACCESS_KEY
 });
 
-const s3Query = (path: string) => {
-    return new Promise((resolve) => {
-        s3.send(new GetObjectCommand({
-            Bucket: process.env.S3_BUCKET_NAME,
-            Key: path
-        }))
-            .then((data: any) => {
-                data.Body.transformToString()
-                    .then((body: any) => {
-                        resolve(body);
-                    });
-            })
-            .catch((err: any) => {
-                console.error(err);
-                resolve(null);
+const minioQuery = (path: string) => {
+    return new Promise<Buffer>((resolve) => {
+        minioClient.getObject("public", path)
+        .then((stream: any) => {
+            var chunks: any = [];
+            stream.on("data", (chunk: any) => {
+                chunks.push(chunk);
             });
-    })
-};
+            stream.on("end", () => {
+                const buffer: Buffer = Buffer.concat(chunks);
+                resolve(buffer);
+            });
+            stream.on("error", (err: any) => {
+                console.error(err);
+                const nullBuffer = Buffer.from("");
+                resolve(nullBuffer);
+            });
+        });
+    });
+}
 
-const s3Create = (path: string, body: any) => {
-    return new Promise<boolean>((resolve) => {
-        s3.send(new PutObjectCommand({
-            Bucket: process.env.S3_BUCKET_NAME,
-            Key: path,
-            Body: body
-        }))
-            .then(() => {
-                resolve(true);
-            })
-            .catch((err: any) => {
-                console.error(err);
-                resolve(false);
-            });
-    })
+const minioCreate = (path: string, data: string) => {
+	return new Promise<boolean>((resolve) => {
+		minioClient.putObject("public", path, data)
+		.then(() => {
+			resolve(true);
+		})
+		.catch((err: any) => {
+			console.error(err);
+			resolve(false);
+		});
+	});
 }
 
 const dbQuery = (sql: string, params: string[]) => {
@@ -160,10 +162,10 @@ client.on(Events.ClientReady, ()=>
 	dbQuery("UPDATE discord_users SET score = invites*100 + messages + reactions*10 + seconds/10 + boost_bonus",[])
 	/* decorateServer().then(()=>{
 		console.log(serverDecorationData)
-		s3Create("serverDecorationData.json",JSON.stringify(serverDecorationData))
+		minioCreate("masterbase/serverDecorationData.json",JSON.stringify(serverDecorationData))
 			.then((success:boolean)=>{
-				if(success) console.log("Server decoration data saved to S3.")
-				else console.log("Server decoration data failed to save to S3.")
+				if(success) console.log("Server decoration data saved to Minio.")
+				else console.log("Server decoration data failed to save to Minio.")
 			})
 	}) */
 	//undecorateServer()
@@ -564,7 +566,7 @@ const decorateServer = async() => {
 }
 
 const undecorateServer = async() => {
-	const serverDecorationData: any = await s3Query("serverDecorationData.json").then((data:any)=>{
+	const serverDecorationData: any = await minioQuery("masterbase/serverDecorationData.json").then((data:any)=>{
 		if(data) return JSON.parse(data)
 		else return null
 	})
